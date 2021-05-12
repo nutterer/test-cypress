@@ -1,0 +1,109 @@
+image: docker:stable
+
+# before_script:
+#   - docker info
+
+stages:
+  - deploy
+  - release
+
+deploy_dev:
+  stage: deploy
+  variables:
+    SERVICE_URL: https://behind-platform-api-dev.igeargeek.com
+  only:
+    - develop
+  script:
+  - echo "$CI_BUILD_TOKEN" | docker login -u gitlab-ci-token --password-stdin registry.gitlab.com
+  - docker pull $CI_REGISTRY_IMAGE:latest || true
+  - >
+      docker build -f Dockerfile.prod
+      --build-arg SERVICE_URL=$SERVICE_URL
+      --pull
+      --cache-from $CI_REGISTRY_IMAGE:latest
+      --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+      --tag $CI_REGISTRY_IMAGE:latest
+      .
+  - docker push $CI_REGISTRY_IMAGE:latest
+  - docker run --rm byrnedo/alpine-curl -X POST http://165.22.111.64:9000/api/webhooks/29bd15f6-7d54-4848-8dc5-7b50b7a0414f
+
+
+deploy_staging:
+  stage: deploy
+  variables:
+    SERVICE_URL: https://behind-api-release.igeargeek.com
+  only:
+    - /^release.*/
+  script:
+  - echo "$CI_BUILD_TOKEN" | docker login -u gitlab-ci-token --password-stdin registry.gitlab.com
+  - docker pull $CI_REGISTRY_IMAGE:release || true
+  - >
+      docker build -f Dockerfile.prod
+      --build-arg SERVICE_URL=$SERVICE_URL
+      --pull
+      --cache-from $CI_REGISTRY_IMAGE:release
+      --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+      --tag $CI_REGISTRY_IMAGE:release
+      .
+  - docker push $CI_REGISTRY_IMAGE:release
+  - docker run --rm byrnedo/alpine-curl -X POST http://165.22.111.64:9000/api/webhooks/5f67d597-6284-4c78-ac92-6eacf4f51450
+
+deploy_beta:
+  stage: deploy
+  variables:
+    SERVICE_URL: https://behind-platform-api-beta.igeargeek.com
+  only:
+    - /^beta.*/
+  script:
+  - echo "$CI_BUILD_TOKEN" | docker login -u gitlab-ci-token --password-stdin registry.gitlab.com
+  - docker pull $CI_REGISTRY_IMAGE:beta || true
+  - >
+      docker build -f Dockerfile.prod
+      --build-arg SERVICE_URL=$SERVICE_URL
+      --pull
+      --cache-from $CI_REGISTRY_IMAGE:beta
+      --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+      --tag $CI_REGISTRY_IMAGE:beta
+      .
+  - docker push $CI_REGISTRY_IMAGE:beta
+  - docker run --rm byrnedo/alpine-curl -X POST http://165.22.111.64:9000/api/webhooks/64b7badf-3a10-449e-aece-fdc45849d283
+
+deploy_prod:
+  stage: deploy
+  variables:
+    SERVICE_URL: https://api.behindstar.co
+  only:
+    - master
+  script:
+  - echo "$CI_BUILD_TOKEN" | docker login -u gitlab-ci-token --password-stdin registry.gitlab.com
+  - docker pull $CI_REGISTRY_IMAGE:master || true
+  - >
+      docker build -f Dockerfile.prod
+      --build-arg SERVICE_URL=$SERVICE_URL
+      --pull
+      --cache-from $CI_REGISTRY_IMAGE:master
+      --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+      --tag $CI_REGISTRY_IMAGE:master
+      .
+  - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+  - docker push $CI_REGISTRY_IMAGE:master
+
+
+Sentry [Development]:
+  stage: release
+  image: getsentry/sentry-cli
+  variables:
+    SENTRY_AUTH_TOKEN: a3deb3e4125c494ea55c230a553ae30024725aa6289043b098a320001061a337
+    SENTRY_ORG: i-gear-geek-aw
+    SENTRY_PROJECT: behind
+  script:
+    - npm install
+    - npm run build
+    - sentry-cli releases new -p $SENTRY_PROJECT $CI_COMMIT_SHORT_SHA
+    - sentry-cli releases -p $SENTRY_PROJECT files $CI_COMMIT_SHORT_SHA upload-sourcemaps .nuxt/dist/client --rewrite --url-prefix '~/_nuxt/'
+    - sentry-cli releases set-commits $CI_COMMIT_SHORT_SHA --auto
+    - sentry-cli releases finalize $CI_COMMIT_SHORT_SHA
+    - sentry-cli releases deploys $CI_COMMIT_SHORT_SHA new -e development
+  when: manual
+  only:
+    - develop

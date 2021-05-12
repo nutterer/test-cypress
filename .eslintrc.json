@@ -1,0 +1,29 @@
+{
+  "root": true,
+    "extends": [
+      "airbnb-base",
+      "plugin:vue/recommended"
+    ],
+    "plugins": [
+      "import",
+      "vue"
+    ],
+    "parserOptions": {
+      "parser": "babel-eslint"
+    },
+    "rules": {
+      "semi": [
+        "error",
+        "never"
+      ],
+      "import/no-unresolved": "off",
+      "vue/no-reserved-keys": ["error", {
+        "reserved": ["_id"],
+        "groups": ["_id"]
+      }],
+      "max-len": ["error", { "code": 150, "ignoreTemplateLiterals": true }
+      ],
+      "no-console": "off",
+      "no-underscore-dangle": "off"
+    }
+  }
